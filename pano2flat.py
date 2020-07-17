@@ -2,6 +2,12 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 
+'''
+Reference:
+https://www.cnblogs.com/riddick/p/10258216.html
+https://stackoverflow.com/questions/29678510/convert-21-equirectangular-panorama-to-cube-map
+'''
+
 class Pano:
     __epsion = 10e-7
     def __init__(self, diretory, f = 1., fov = 0):
@@ -26,8 +32,6 @@ class Pano:
             self.size *= np.tan(0.5 * self.fov)
             
     
-            
-
     def show(self):
         print("input image shape", self.img.shape) 
         print("output image size {size}".format(size = self.size))
@@ -45,13 +49,18 @@ class Pano:
 
         '''
         x = 1.
-        r = 0.5 * self.size
+        r = 0.5 * self.size + self.__epsion
+        if r == 0:
+            print("error zero")
         for i in range(self.size):
             z = 1 - i / r
             for j in range(self.size):
-                y = 1 - j / r
+                try:
+                    y = 1 - j / r
+                except RuntimeWarning:
+                    print("zero error:", i, j)
                 # spherial coordinate
-                theta = np.arctan2(y, x)
+                theta = np.mod(np.arctan2(y, x), 2*np.pi)
                 sigma = np.arccos(z/np.sqrt(x*x+y*y+z*z)) 
                 # local coordinate at input image
                 u = theta * self.width / (2. * np.pi)
@@ -60,8 +69,19 @@ class Pano:
                 # Use bilinear interpolation between the four surrounding pixels
                 ui = int(np.floor(u))  # coord of pixel to bottom left
                 vi = int(np.floor(v))
-
-         
-                output_image[i,j] = self.img[vi,ui]
+                
+                u2 = ui+1       # coords of pixel to top right
+                v2 = vi+1
+                nu = u-ui      # fraction of way across pixel
+                nv = v-vi
+                
+                # Pixel values of four corners
+                A = self.img[vi % self.height,ui % self.width]
+                B = self.img[v2 % self.height,ui % self.width]
+                C = self.img[vi % self.height,u2 % self.width]
+                D = self.img[v2 % self.height,u2 % self.width]
+              
+                # interpolate
+                output_image[i,j]  = (A*(1-nv)*(1-nu) + B*(nv)*(1-nu) + C*(1-nv)*nu+D*nv*nu).astype(np.uint8)
 
         return output_image
