@@ -16,10 +16,17 @@ class Pano:
 
         self.diretory = diretory
         self.fov = fov
-        self.theta = viewpoint[0] * np.pi / 180.
-        self.sigma = viewpoint[1] * np.pi / 180.
         self.f = f
-
+        self.viewpoint = np.mod(np.array(viewpoint) * np.pi / 180, 2*np.pi)
+        self.rotation = np.zeros((2,3,3))
+        self.rotation[0] = np.array([[np.cos(self.viewpoint[0]), 0, np.sin(self.viewpoint[0])],
+                                    [0,1,0],
+                                    [-np.sin(self.viewpoint[0]), 0, np.cos(self.viewpoint[0])]])
+        self.rotation[1] = np.array([[np.cos(self.viewpoint[1]), -np.sin(self.viewpoint[1]), 0],
+                                    [np.sin(self.viewpoint[1]), np.cos(self.viewpoint[1]), 0],
+                                    [0,0,1]])
+        
+        print(self.rotation)
         # input image checking
         #with cv2.imread(self.diretory) as img:
         img = cv2.imread(self.diretory)
@@ -74,22 +81,26 @@ class Pano:
         y = 0.5 * size - j
         z = 0.5 * size - i
         '''
-        x = 1.
+        x0 = 1.
         scale = np.tan(self.fov * np.pi / 360.)
         for i in range(self.size):
-            z = scale - i / self.r
+            z0 = scale - i / self.r
             for j in range(self.size):
-                y = scale - j / self.r
+                y0 = scale - j / self.r
+                x, y, z = np.dot(self.rotation[1], np.dot(self.rotation[0], np.array([x0, y0, z0])))
                 # spherial coordinate
-                theta = np.mod(np.arctan2(y, x) - self.theta, 2*np.pi) 
-                sigma = np.mod(np.arccos(z/np.sqrt(x*x+y*y+z*z)) - self.sigma, 2 * np.pi) 
+                theta = np.mod(np.arctan2(y, x), 2*np.pi) 
+                sigma = np.mod(np.arccos(z/np.sqrt(x*x+y*y+z*z)), 2 * np.pi) 
+       
                 # local coordinate at input image
                 u = theta * self.width / (2. * np.pi)
                 v = sigma * self.height / np.pi
+
                 if (i > 500 and i < 505 and j > 300 and j < 320):
                     print((theta, sigma))
                 # Use bilinear interpolation between the four surrounding pixels
                 o_img[i,j] = self.bilinearInterp(u, v, self.img)
+  
 
         return o_img
 
