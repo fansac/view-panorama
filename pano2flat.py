@@ -12,13 +12,14 @@ no enough testing
 
 class Pano:
     __epsion = 10e-7
-    def __init__(self, diretory, fov = 90, viewpoint = (0., 0.), f = 1.):
+    def __init__(self, diretory, fov = 90, yaw = 0., pitch = 0., f = 1.):
         assert(f > 0.1 and f < 10.)
         assert(fov > 0 and fov < 180)
 
         self.diretory = diretory
         self.fov = fov
         self.f = f
+        viewpoint = [yaw, pitch]
         self.rotation = self.yzRotate(viewpoint)
         # input image checking
         #with cv2.imread(self.diretory) as img:
@@ -39,12 +40,16 @@ class Pano:
     def yzRotate(self, viewpoint):
         vp = np.mod(np.array(viewpoint) * np.pi / 180, 2*np.pi)
         rotation = np.zeros((2,3,3))
-        rotation[0] = np.array([[np.cos(vp[0]), 0, np.sin(vp[0])],
-                                [0,1,0],
-                                [-np.sin(vp[0]), 0, np.cos(vp[0])]])
-        rotation[1] = np.array([[np.cos(vp[1]), -np.sin(vp[1]), 0],
-                                [np.sin(vp[1]), np.cos(vp[1]), 0],
-                                [0,0,1]])
+        #z axis
+        rotation[0] = np.array([[np.cos(vp[0]), np.sin(vp[0]), 0],
+                                [-np.sin(vp[0]), np.cos(vp[0]), 0],
+                                [0, 0, 1]])
+        # x axis
+        rotation[1] = np.array([[1, 0, 0],
+                                [0, np.cos(vp[1]), -np.sin(vp[1])],
+                                [0, np.sin(vp[1]), np.cos(vp[1])]])
+        print(rotation)
+        
         return rotation
     
     def show(self):
@@ -77,19 +82,23 @@ class Pano:
         o_img = np.empty([self.size, self.size, self.channel], dtype = np.uint8) 
         ''' 
         x,y,z coordinate 
-        x = 0.5* size
-        y = 0.5 * size - j
+        heading(default: north)
+        y = 0.5 * size
+        x = -0.5 * size + j
         z = 0.5 * size - i
+
+        x points to east, y points to north, z points to up
+        x neg-pos (j), z pos-neg (i)
         '''
-        x0 = 1.
+        y0 = 1.0
         scale = np.tan(self.fov * np.pi / 360.)
         for i in range(self.size):
             z0 = scale - i / self.r
             for j in range(self.size):
-                y0 = scale - j / self.r
-                x, y, z = np.dot(self.rotation[1], np.dot(self.rotation[0], np.array([x0, y0, z0])))
+                x0 = -scale + j / self.r
+                x, y, z = np.dot(self.rotation[0], np.dot(self.rotation[1], np.array([x0, y0, z0])))
                 # spherial coordinate
-                theta = np.mod(np.arctan2(y, x), 2*np.pi) 
+                theta = np.mod(1.5*np.pi + np.arctan2(x, y), 2*np.pi) 
                 sigma = np.mod(np.arccos(z/np.sqrt(x*x+y*y+z*z)), 2 * np.pi) 
        
                 # local coordinate at input image
@@ -107,14 +116,14 @@ class Pano:
         o_img = np.empty([self.size, self.size, self.channel], dtype = np.uint8) 
         scale = np.tan(self.fov * np.pi / 360.)
 
-        x0 = np.ones(o_img.shape[0:2])
-        y0 = scale - np.repeat(np.array([range(self.size)]), repeats = [self.size], axis = 0) / self.r
-        z0 = y0.T
+        y0 = np.ones(o_img.shape[0:2])
+        x0 = -scale + np.repeat(np.array([range(self.size)]), repeats = [self.size], axis = 0) / self.r
+        z0 = -x0.T
         a0 = np.dstack((x0, y0, z0))
         # apply ratation
-        a = np.dot(np.dot(a0, self.rotation[0]), self.rotation[1])
+        a = np.dot(np.dot(a0, self.rotation[1].T), self.rotation[0].T)
         # spherial coordinate
-        theta = np.mod(np.arctan2(a[:,:,1], a[:,:,0]), 2*np.pi)
+        theta = np.mod(1.5*np.pi + np.arctan2(a[:,:,0], a[:,:,1]), 2*np.pi)
         sigma = np.mod(np.arccos(a[:,:,2]/np.sqrt(np.sum(a*a, axis = 2))), 2 * np.pi)
         # local coordinate at input image
         u = theta * self.width / (2. * np.pi)
@@ -122,5 +131,13 @@ class Pano:
         # Use bilinear interpolation between the four surrounding pixels
         return self.bilinearInterp(u, v, self.img)
 
+if __name__ == "__main__":
+    p = Pano("E:\cs\deeplearning\panos\googleApi\pano.jpg", yaw = 90, pitch = 0)
+    #p.show()
 
+    img = p.pano2flatVectorization()
+
+    cv2.imshow("Image", img)
+    cv2.imwrite("image.jpg", img)
+    cv2.waitKey(0)    
    
