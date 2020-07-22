@@ -21,7 +21,6 @@ class Pano:
         self.f = f
         self.rotation = self.yzRotate(viewpoint)
         # input image checking
-        #with cv2.imread(self.diretory) as img:
         img = cv2.imread(self.diretory)
         self.img = img.copy()
         self.height, self.width, self.channel = self.img.shape 
